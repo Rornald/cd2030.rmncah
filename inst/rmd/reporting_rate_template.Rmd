@@ -104,7 +104,7 @@ data %>%
    fontsize(size = 9) %>% 
           theme_vanilla() %>%
   set_table_properties(layout = "autofit") %>% 
-  set_caption(caption = 'Table 1: Summary reported immunization health facility data DHIS2')
+  set_caption(caption = 'Table 1: Table 1: Summary of reported health facility data quality, DHIS2, 2019-2024')
 ```
 
 ### District Reporting Rates
