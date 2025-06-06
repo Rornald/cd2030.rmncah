@@ -1,18 +1,9 @@
-denominatorInputUI <- function(id, i18n, label = 'title_denominator') {
+denominatorInputUI <- function(id, i18n) {
   ns <- NS(id)
-  selectizeInput(
-    ns('denominator'),
-    label = i18n$t(label),
-    choices = c(
-      'DHIS2' = 'dhis2',
-      'ANC 1' = 'anc1',
-      'Penta 1' = 'penta1',
-      'Penta 1 Population Growth' = 'penta1derived'
-    )
-  )
+  uiOutput(ns('denominator_ui'))
 }
 
-denominatorInputServer <- function(id, cache, allowInput = FALSE) {
+denominatorInputServer <- function(id, cache, i18n, label = 'title_denominator', allowInput = FALSE, maternal = FALSE) {
   stopifnot(is.reactive(cache))
 
   moduleServer(
@@ -22,24 +13,41 @@ denominatorInputServer <- function(id, cache, allowInput = FALSE) {
 
       denominator <- reactive({
         req(cache())
-        cache()$denominator
-      })
-
-      observe({
-        req(denominator())
-        updateSelectizeInput(session, 'denominator', selected = denominator())
-
-        if (!allowInput) {
-          runjs(str_glue("$('#{ns('denominator')}')[0].selectize.lock();"))
-        }
+        if (maternal) cache()$maternal_denominator else cache()$denominator
       })
 
       observeEvent(input$denominator, {
         req(cache(), input$denominator, allowInput)
-        cache()$set_denominator(input$denominator)
+        if (maternal) {
+          cache()$set_maternal_denominator(input$denominator)
+        } else {
+          cache()$set_denominator(input$denominator)
+        }
       })
 
-      return(denominator)
+      output$denominator_ui <- renderUI({
+        if (allowInput) {
+          selectizeInput(
+            ns('denominator'),
+            label = i18n$t(label),
+            choices = c(
+              'DHIS2' = 'dhis2',
+              'ANC 1' = 'anc1',
+              'Penta 1' = 'penta1',
+              'Penta 1 Population Growth' = 'penta1derived'
+            ),
+            selected = denominator()
+          )
+        } else {
+          tags$div(
+            tags$label(class = 'control-label', i18n$t(label)),
+            tags$p(
+              tags$b('Vaccination'), ': ', cache()$denominator, tags$br(),
+              tags$b('Maternal'), ': ', cache()$maternal_denominator
+            )
+          )
+        }
+      })
     }
   )
 }

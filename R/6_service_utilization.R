@@ -39,13 +39,13 @@ compute_service_utilization <- function(.data, admin_level = c('national', 'admi
       .by = c(adminlevel_1, district, year),
     ) %>%
     summarise(
-      across(all_of(c(vars, pop_vars)), if(admin_level == 'national') sum else mean, na.rm = TRUE),
-      across(ends_with('_rr'), ~ if (admin_level == 'national') robust_max(.x) else mean(.x, na.rm = TRUE)),
+      across(all_of(c(vars, pop_vars)), sum, na.rm = TRUE),
+      across(ends_with('_rr'), robust_max),
       .by = all_of(admin_level_cols)
     ) %>%
     mutate(
       mean_opd_total = opd_total / total_pop,
-      mean_ipd_total = ipd_total / total_pop,
+      mean_ipd_total = 100 * ipd_total / total_pop,
       mean_opd_under5 = opd_under5 / under5_pop,
       mean_ipd_under5 = ipd_under5 / under5_pop,
       perc_opd_under5 = 100 * opd_under5 / opd_total,

@@ -3,19 +3,16 @@
 #' Generates a plot to visualize health coverage data across subnational units,
 #' distinguishing between the national mean and subnational coverage. The Mean
 #' Absolute Difference to the Mean (MADM) is displayed as an indicator on the
-#' y-axis. Titles, subtitles, and labels dynamically adjust based on the chosen
-#' indicator, denominator, and level.
+#' y-axis.
 #'
-#' @param x A `cd_inequality` object returned by [calculate_inequality()].
-#' @param indicator Character. Indicator to plot
-#' @param denominator Character. The denominator to use
+#' @param x A `cd_inequality_filtered` object returned by [filter_inequality()].
 #' @param ... Additional arguments passed to the plotting function.
 #'
 #' @return A `ggplot` object displaying the subnational health coverage plot.
 #'
 #' @examples
 #' \dontrun{
-#' data <- calculate_inequality(.data, "Kenya",
+#' data <- filter_inequality(.data, "Kenya",
 #'   admin_level = "district",
 #'   indicator = "measles1", denominator = "penta1"
 #' )
@@ -23,16 +20,16 @@
 #' }
 #'
 #' @export
-plot.cd_inequality <- function(x,
-                               indicator,
-                               denominator = c("dhis2", "anc1", "penta1", "penta1derived"),
-                               ...) {
+plot.cd_inequality_filtered <- function(x, ...) {
   year <- nat <- madm <- NULL
 
-  admin_level <- attr(x, "admin_level")
-  indicator <- arg_match(indicator, get_all_indicators())
-  denominator <- arg_match(denominator)
-  data <- filter_inequality(x, indicator, denominator)
+  admin_level <- attr_or_abort(x, "admin_level")
+  region <- attr_or_null(x, 'region')
+  indicator <- attr_or_abort(x, 'indicator')
+  denominator <- attr_or_abort(x, 'denominator')
+  # indicator <- arg_match(indicator, get_all_indicators())
+  # denominator <- arg_match(denominator)
+  # data <- filter_inequality(x, indicator, denominator)
 
   title <- switch(indicator,
     anc1 = "Antenatal care 1+ visits",
@@ -60,7 +57,7 @@ plot.cd_inequality <- function(x,
 
   subtitle <- switch(admin_level,
     district = "Subnational unit: district level",
-    adminlevel_1 = "Subnational unit: admin 1 level"
+    adminlevel_1 = str_glue("Subnational unit: {if (is.null(region)) 'admin 1 level' else region}")
   )
 
   caption <- switch(denominator,
@@ -70,17 +67,18 @@ plot.cd_inequality <- function(x,
   )
 
   y_label <- ifelse(indicator == "low_bweight", "Prevalence (%)", "Coverage (%)")
-  max_y <- robust_max(data$rd_max, 100)
+  max_y <- robust_max(x$rd_max, 100)
   limits <- c(0, max_y)
   breaks <- scales::pretty_breaks(n = 11)(limits)
   second_last_break <- sort(breaks, decreasing = TRUE)[2]
   max_break <- robust_max(breaks, 0)
+  color <- if (is.null(region)) "National coverage" else str_glue('{region} Coverage')
 
-  ggplot(data) +
+  ggplot(x) +
     geom_point(aes(x = year, y = !!sym(paste0("cov_", indicator, "_", denominator)), color = "Coverage at subnational unit"),
       size = 3
     ) +
-    geom_point(aes(x = year, y = nat, color = "National coverage"), size = 1.5, shape = 3, stroke = 1.5) +
+    geom_point(aes(x = year, y = nat, color = color), size = 1.5, shape = 3, stroke = 1.5) +
     geom_text(aes(x = year, y = second_last_break, label = round(madm, 2)),
       color = "black", fontface = "bold", vjust = 0.5, size = 4
     ) +
@@ -96,7 +94,7 @@ plot.cd_inequality <- function(x,
       breaks = breaks,
       labels = function(y) ifelse(y == second_last_break, "MADM", ifelse(y == max_break, "", as.character(y))) # Replace max_y - 10 with "MADM"
     ) +
-    scale_color_manual(values = c("Coverage at subnational unit" = "skyblue3", "National coverage" = "red")) +
+    scale_color_manual(values = set_names(c('skyblue3', 'red1'), c('Coverage at subnational unit', color))) +
     cd_plot_theme() +
     theme(
       panel.border = element_blank(),

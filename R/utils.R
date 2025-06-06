@@ -48,6 +48,18 @@ check_cd_data <- function(.data, arg = caller_arg(.data), call = caller_env()) {
   check_cd_class(.data, "cd_data", arg = arg, call = call)
 }
 
+check_cd_fpet <- function(.data, arg = caller_arg(.data), call = caller_env()) {
+  check_cd_class(.data, "cd_fpet", arg = arg, call = call)
+}
+
+check_cd_mapping <- function(.data, arg = caller_arg(.data), call = caller_env()) {
+  check_cd_class(.data, "cd_mapping", arg = arg, call = call)
+}
+
+check_cd_coverage <- function(.data, arg = caller_arg(.data), call = caller_env()) {
+  check_cd_class(.data, "cd_coverage", arg = arg, call = call)
+}
+
 #' Validate UN Estimates Data for Population Metrics
 #'
 #' Ensures the provided UN estimates data is valid and appropriate for the selected
@@ -77,6 +89,10 @@ check_un_estimates_data <- function(.data = NULL,
 
 check_un_mortality_data <- function(.data, arg = caller_arg(.data), call = caller_env()) {
   check_cd_class(.data, "cd_un_mortality", arg = arg, call = call)
+}
+
+check_fpet_data <- function(.data, arg = caller_arg(.data), call = caller_env()) {
+  check_cd_class(.data, "cd_fpet_data", arg = arg, call = call)
 }
 
 check_wuenic_data <- function(.data, arg = caller_arg(.data), call = caller_env()) {
@@ -165,8 +181,8 @@ cd_plot_theme <- function() {
     plot.title = element_text(size = 16, hjust = 0.5),
     plot.subtitle = element_text(size = 12, hjust = 0.5),
     plot.caption = element_text(size = 12, hjust = 0),
-    axis.text = element_text(size = 14),
-    axis.title = element_text(size = 18),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 16),
     strip.background = element_blank(),
     strip.text = element_text(size = 12)
   )

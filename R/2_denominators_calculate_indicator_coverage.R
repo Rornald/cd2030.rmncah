@@ -44,6 +44,7 @@
 calculate_indicator_coverage <- function(.data,
                                          admin_level = c("national", "adminlevel_1", "district"),
                                          un_estimates = NULL,
+                                         region = NULL,
                                          sbr = 0.02,
                                          nmr = 0.025,
                                          pnmr = 0.024,
@@ -55,12 +56,14 @@ calculate_indicator_coverage <- function(.data,
   check_cd_data(.data)
   check_scalar_integerish(survey_year)
   admin_level <- arg_match(admin_level)
-  admin_level_cols <- get_admin_columns(admin_level)
-  country_iso <- attr(.data, "iso3")
+  admin_level_cols <- get_admin_columns(admin_level, region)
+  admin_level_cols <- c(admin_level_cols, 'year')
+  country_iso <- attr_or_abort(.data, 'iso3')
 
   population <- calculate_populations(.data,
     admin_level = admin_level,
     un_estimates = un_estimates,
+    region = region,
     sbr = sbr, nmr = nmr, pnmr = pnmr,
     anc1survey = anc1survey, dpt1survey = dpt1survey,
     twin = twin, preg_loss = preg_loss
@@ -69,33 +72,93 @@ calculate_indicator_coverage <- function(.data,
 
   derived_data <- get_indicator_without_opd_ipd() %>%
     map(~ {
-      dt <- calculate_derived_coverage(population, .x, survey_year)
+      dt <- calculate_derived_coverage(population, .x, survey_year, region)
 
       if (!is.null(dt)) {
         dt %>%
-          select(year, any_of(admin_level_cols), ends_with("penta1derived"))
+          select(any_of(admin_level_cols), ends_with("penta1derived"))
       } else {
         dt
       }
     }) %>%
     compact() %>%
     unique() %>%
-    reduce(coalesce_join, by = c("year", admin_level_cols))
+    reduce(coalesce_join, by = admin_level_cols)
 
   output_data <- population %>%
-    left_join(derived_data, by = c("year", admin_level_cols))
+    left_join(derived_data, by = admin_level_cols)
 
   new_tibble(
     output_data,
     class = c("cd_indicator_coverage", "cd_population"),
     admin_level = admin_level,
-    iso3 = country_iso
+    iso3 = country_iso,
+    region = region
+  )
+}
+
+#' Filter Indicator Coverage for Plotting
+#'
+#' Prepares a long-form data frame of coverage values across denominator sources for a specific indicator
+#' and year, including a user-defined national survey coverage value.
+#'
+#' @param .data A `cd_indicator_coverage` object.
+#' @param indicator A string. The target health indicator (e.g., `"penta3"`, `"bcg"`).
+#' @param survey_coverage A scalar numeric. The national survey coverage to include as a reference. Default is `88`.
+#'
+#' @return A `tibble` of class `'cd_indicator_coverage_filtered'`, enriched with attributes for plotting.
+#'
+#' @details
+#' The function reshapes wide coverage data into long format, classifies each column by denominator type,
+#' and extracts the indicator name. It selects only data for the most recent available year.
+#'
+#' @examples
+#' \dontrun{
+#' filtered <- filter_indicator_coverage(df, indicator = "penta3", survey_coverage = 90)
+#' plot(filtered)
+#' }
+#'
+#' @seealso [plot.cd_indicator_coverage_filtered()]
+#'
+#' @export
+filter_indicator_coverage <- function(.data, indicator, survey_coverage = 88) {
+  check_cd_indicator_coverage(.data)
+  indicator <- arg_match(indicator, get_indicator_without_opd_ipd())
+
+  if (!is_scalar_double(survey_coverage)) {
+    cd_abort(c("x" = "A scalar numeric is required."))
+  }
+
+  max_year <- robust_max(.data$year, 2024)
+
+  # Prepare the data for plotting
+  data <- .data %>%
+    pivot_longer(-any_of(c("country", "year", "iso3"))) %>%
+    mutate(
+      category = case_when(
+        grepl("_dhis2$", name) ~ "DHIS2 projection",
+        grepl("_anc1$", name) ~ "ANC1-derived",
+        grepl("_penta1$", name) ~ "Penta1-derived",
+        grepl("_un$", name) ~ "UN projection",
+        grepl("_penta1derived$", name) ~ "Penta 1 population Growth"
+      ),
+      category = factor(category, levels = c("DHIS2 projection", "ANC1-derived", "Penta1-derived", "UN projection", "Penta 1 population Growth")),
+      indicator_name = str_extract(name, "(?<=cov_).*?(?=_)")
+    ) %>%
+    filter(year == max_year, indicator_name == indicator)
+
+  new_tibble(
+    data,
+    class = 'cd_indicator_coverage_filtered',
+    indicator = indicator,
+    coverage = survey_coverage
   )
 }
 
 calculate_populations <- function(.data,
                                   admin_level = c("national", "adminlevel_1", "district"),
                                   un_estimates = NULL,
+                                  region = NULL,
                                   sbr = 0.02,
                                   nmr = 0.025,
                                   pnmr = 0.024,
@@ -121,10 +184,12 @@ calculate_populations <- function(.data,
     totinftmeasles_anc1 <- totmeasles2_anc1 <- totpreg_penta1 <-
     otinftmeasles_penta1 <- totmeasles2_penta1 <- NULL
 
-  national_population <- prepare_population_metrics(.data, admin_level = admin_level, un_estimates = un_estimates)
-  indicator_numerator <- compute_indicator_numerator(.data, admin_level = admin_level)
+  admin_level <- arg_match(admin_level)
 
-  group_vars <- get_admin_columns(admin_level)
+  national_population <- prepare_population_metrics(.data, admin_level = admin_level, un_estimates = un_estimates, region = region)
+  indicator_numerator <- compute_indicator_numerator(.data, admin_level = admin_level, region = region)
+
+  group_vars <- get_admin_columns(admin_level, region)
 
   output_data <- national_population %>%
     inner_join(indicator_numerator, by = c(group_vars, "year")) %>%

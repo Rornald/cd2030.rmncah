@@ -42,6 +42,7 @@ source('modules/page_objects_config.R')
 
 source('ui/admin-level-input.R')
 source('ui/content_body.R')
+source('ui/content_dashboard.R')
 source('ui/content_header.R')
 source('ui/denominator-input.R')
 source('ui/documentation_button.R')
@@ -56,36 +57,46 @@ source('ui/region-input.R')
 source('ui/report_button.R')
 source('ui/save_cache.R')
 
+source('modules/introduction.R')
+
+source('modules/0_upload_data.R')
 source('modules/1a_checks_reporting_rate.R')
 source('modules/1a_checks_outlier_detection.R')
-source('modules/calculate_ratios.R')
-source('modules/consistency_check.R')
-source('modules/data_adjustment_changes.R')
-source('modules/data_adjustment.R')
-source('modules/data_completeness.R')
-source('modules/derived_coverage.R')
-source('modules/denominator_assessment.R')
-source('modules/denominator_selection.R')
-source('modules/equity.R')
-source('modules/introduction.R')
-source('modules/national_coverage.R')
-source('modules/overall_score.R')
-source('modules/remove_years.R')
+source('modules/1a_consistency_check.R')
+source('modules/1a_data_completeness.R')
+source('modules/1a_calculate_ratios.R')
+source('modules/1a_overall_score.R')
+
+source('modules/1b_remove_years.R')
+
+source('modules/1c_data_adjustment_changes.R')
+source('modules/1c_data_adjustment.R')
 
 source('modules/setup.R')
-source('modules/subnational_coverage.R')
-source('modules/subnational_inequality.R')
-source('modules/subnational_mapping.R')
-source('modules/upload_data.R')
-source('modules/low_reporting.R')
+
+source('modules/2_denominator_assessment.R')
+source('modules/2_denominator_selection.R')
+source('modules/2_derived_coverage.R')
+
+source('modules/3_national_coverage.R')
+source('modules/3_national_inequality.R')
+source('modules/3_subnational_mapping.R')
+source('modules/3_national_target.R')
+source('modules/3_equity.R')
+
+source('modules/4_subnational_coverage.R')
+source('modules/4_subnational_inequality.R')
+source('modules/4_subnational_target.R')
+
 source('modules/5_mortality.R')
 source('modules/6_service_utilization.R')
 source('modules/7_health_system_national.R')
 source('modules/7_health_system_subnational.R')
 source('modules/7_health_system_comparison.R')
+source('modules/family_planning.R')
 
 i18n <- init_i18n(translation_json_path = 'translation/translation.json')
-i18n$set_translation_language('fr')
+i18n$set_translation_language ('en')
 
 ui <- dashboardPage(
   skin = 'blue',
@@ -95,7 +106,7 @@ ui <- dashboardPage(
     selectInput(
       inputId = 'selected_language',
       label = i18n$t('change_language'),
-      choices = c('English' = 'en', 'French' = 'fr'),
+      choices = c('English' = 'en', 'French' = 'fr', 'Portuguese'= 'pt'),
       selected = i18n$get_key_translation()
     ),
     sidebarMenu(
@@ -150,7 +161,28 @@ ui <- dashboardPage(
                            tabName = 'derived_coverage',
                            icon = icon('chart-line'))
                ),
-      menuItem(i18n$t('title_national_coverage'), tabName = 'national_coverage', icon = icon('flag')),
+      menuItem(i18n$t('title_national_analysis'),
+               tabName = 'national_analysis',
+               icon = icon('flag'),
+               menuSubItem(i18n$t('title_national_coverage'),
+                           tabName = 'national_coverage',
+                           icon = icon('flag')),
+               menuSubItem(i18n$t('title_global_coverage'),
+                           tabName = 'national_target',
+                           icon = icon('user-slash')),
+               menuSubItem(i18n$t('title_fpet'),
+                           tabName = 'fpet_projection',
+                           icon = icon('user-slash')),
+               menuSubItem(i18n$t('title_national_inequality'),
+                           tabName = 'national_inequality',
+                           icon = icon('balance-scale-right')),
+               menuSubItem(i18n$t('title_subnational_mapping'),
+                           tabName = 'subnational_mapping',
+                           icon = icon('map')),
+               menuSubItem(i18n$t('title_equity_assessment'),
+                           tabName = 'equity_assessment',
+                           icon = icon('balance-scale'))
+              ),
       menuItem(i18n$t('title_subnational_analysis'),
                tabName = 'subnational_analysis',
                icon = icon('globe-africa'),
@@ -161,13 +193,9 @@ ui <- dashboardPage(
                            tabName = 'subnational_inequality',
                            icon = icon('balance-scale-right')),
                menuSubItem(i18n$t('title_global_coverage'),
-                           tabName = 'low_reporting',
-                           icon = icon('user-slash')),
-               menuSubItem(i18n$t('title_subnational_mapping'),
-                           tabName = 'subnational_mapping',
-                           icon = icon('map'))
+                           tabName = 'subnational_target',
+                           icon = icon('user-slash'))
                ),
-      menuItem(i18n$t('title_equity_assessment'), tabName = 'equity_assessment', icon = icon('balance-scale')),
       menuItem(i18n$t('title_mortality'), tabName = 'mortality', icon = icon('balance-scale')),
       menuItem(i18n$t('title_service_utilization'), tabName = 'service_utilization', icon = icon('balance-scale')),
       menuItem(i18n$t('opt_health_system_performance'),
@@ -229,11 +257,19 @@ ui <- dashboardPage(
       tags$script(src = "jquery.slimscroll.min.js"),
       tags$script(HTML("
         $(function() {
-          $('.sidebar').slimScroll({
-            height: '100%',
-            alwaysVisible: true,
-            size: '6px'
+          $('body, html, ' + '.wrapper').css({
+            'height'    : 'auto',
+            'min-height': '100%'
           });
+          $('body').addClass('fixed');
+          var windowHeight  = $(window).height();
+          var footerHeight  = $('.main-footer').outerHeight() || 0;
+          $('.content-wrapper').css('min-height', windowHeight - footerHeight);
+          if ($('.main-sidebar').find('slimScrollDiv').length === 0) {
+            $('.sidebar').slimScroll({
+              height: (windowHeight - $('.main-header').height()) + 'px'
+            });
+          }
         });
       "))
     ),
@@ -255,15 +291,18 @@ ui <- dashboardPage(
       tabItem(tabName = 'denominator_selection', denominatorSelectionUI('denominator_selection', i18n = i18n)),
       tabItem(tabName = 'national_coverage', nationalCoverageUI('national_coverage', i18n = i18n)),
       tabItem(tabName = 'subnational_coverage', subnationalCoverageUI('subnational_coverage', i18n = i18n)),
+      tabItem(tabName = 'national_inequality', nationalInequalityUI('national_inequality', i18n = i18n)),
       tabItem(tabName = 'subnational_inequality', subnationalInequalityUI('subnational_inequality', i18n = i18n)),
-      tabItem(tabName = 'low_reporting', lowReportingUI('low_reporting', i18n = i18n)),
+      tabItem(tabName = 'national_target', nationalTargetUI('national_target', i18n = i18n)),
+      tabItem(tabName = 'subnational_target', subnationalTargetUI('subnational_target', i18n = i18n)),
       tabItem(tabName = 'subnational_mapping', subnationalMappingUI('subnational_mapping', i18n = i18n)),
       tabItem(tabName = 'equity_assessment', equityUI('equity_assessment', i18n = i18n)),
       tabItem(tabName = 'mortality', mortalityUI('mortality', i18n = i18n)),
       tabItem(tabName = 'service_utilization', serviceUtilizationUI('service_utilization', i18n = i18n)),
       tabItem(tabName = 'health_system_national', healthSystemNationalUI('health_system_national', i18n = i18n)),
       tabItem(tabName = 'health_system_subnational', healthSystemSubnationalUI('health_system_subnational', i18n = i18n)),
-      tabItem(tabName = 'health_system_comparison', healthSystemComparisonUI('health_system_comparison', i18n = i18n))
+      tabItem(tabName = 'health_system_comparison', healthSystemComparisonUI('health_system_comparison', i18n = i18n)),
+      tabItem(tabName = 'fpet_projection', familyPlanningUI('fpet_projection', i18n = i18n))
     ),
     tags$script(src = 'script.js')
   )
@@ -282,7 +321,6 @@ server <- function(input, output, session) {
 
     # shinyjs::delay(500, {
     updateHeader(cache()$country, i18n)
-    shinyjs::addClass(selector = 'body', class = 'fixed')
     # })
   })
 
@@ -311,8 +349,10 @@ server <- function(input, output, session) {
   denominatorSelectionServer('denominator_selection', cache, i18n)
   nationalCoverageServer('national_coverage', cache, i18n)
   subnationalCoverageServer('subnational_coverage', cache, i18n)
+  nationalInequalityServer('national_inequality', cache, i18n)
   subnationalInequalityServer('subnational_inequality', cache, i18n)
-  lowReportingServer('low_reporting', cache, i18n)
+  nationalTargetServer('national_target', cache, i18n)
+  subnationalTargetServer('subnational_target', cache, i18n)
   subnationalMappingServer('subnational_mapping', cache, i18n)
   equityServer('equity_assessment', cache, i18n)
   mortalityServer('mortality', cache, i18n)
@@ -320,6 +360,7 @@ server <- function(input, output, session) {
   healthSystemNationalServer('health_system_national', cache, i18n)
   healthSystemSubnationalServer('health_system_subnational', cache, i18n)
   healthSystemComparisonServer('health_system_comparison', cache, i18n)
+  familyPlanningServer('fpet_projection', cache, i18n)
   downloadReportServer('download_report', cache, i18n)
   saveCacheServe('save_cache', cache, i18n)
 
